@@ -15,7 +15,7 @@ of a binary, and then once their malware executes-- delete the binary with a sup
 ### Notes:
 
 - Any conditional can be used to be set to delete the binary.
-- It was inspired by [Vault-8's Hive self-deletion algorithm](https://wikileaks.org//vault8/#Hive) which was
+- It was inspired by [Vault-8's Hive self-deletion algorithm](https://wikileaks.org/vault7/document/hive-DevelopersGuide/hive-DevelopersGuide.pdf) which was
 built and developed by the CIA to hide traces of their malware from the victim's
 computer. It never left experimentation, but it was kept around for potential future
 use.
