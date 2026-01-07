@@ -2,7 +2,9 @@
 
 The code in this repository is an example of what a self-deleting binary in linux would look like.
 You can run it with cargo-- or compile it and then run it. Designed for linux machines, should work
-on any unix-like system.
+on any unix-like system. The live branch contains add-ons for malicious code execution, which is currently
+a work in progress. The main branch only contains a theoretical program that could find where the binary 
+is being ran from for self-deletion.
 
 ## How does this work?
 In unix-like systems, the OS will create a symlink to the binary at `/proc/{process_id}/exe`.
