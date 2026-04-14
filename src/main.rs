@@ -6,8 +6,12 @@ use std::{
     process, thread, time,
 };
 
+const BIN_NAME: &str = env!("CARGO_PKG_NAME");
+const SECONDS_BEFORE_DELETION: u64 = 10;
+
 fn delete(abs_path: &PathBuf) -> Result<(), Box<dyn Error>> {
     /*Deletes the path of the binary*/
+    eprintln!("Deleting {BIN_NAME} @ path={:?}", abs_path);
     fs::remove_file(abs_path)?;
     Ok(())
 }
@@ -68,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut counter: u64 = 0;
         loop {
             bin_path = get_malware_path().expect("something went wrong within the thread");
-            if timer(counter, 30) {
+            if timer(counter, SECONDS_BEFORE_DELETION) {
                 match delete(&bin_path) {
                     Ok(()) => (),
                     Err(e) => eprintln!("{e}"),
