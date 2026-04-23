@@ -12,7 +12,8 @@ What this program does is it creates a thread to keep track of the location of t
 of time (30 seconds) it will delete the binary.
 
 In a real world scenario, this algorithm could be implemented by an attacker to either rotate the name
-of a binary, and then once their malware executes-- delete the binary with a supplied method.
+of a binary or delete it. Ideally, it would be used as a module for the attacker's malware, and then once their malware executes-- 
+delete the binary with a supplied method.
 
 ### Notes:
 
